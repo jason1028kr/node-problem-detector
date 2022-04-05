@@ -85,14 +85,14 @@ data:
           "type": "permanent",
           "condition": "TestConditionHasProblem",
           "reason": "TestIsIntentionallyFailing",
-          "path": "/home/kubernetes/scripts//test_condition_fail.sh",
+          "path": "/home/kubernetes/test_condition_fail.sh",
           "timeout": "60s"
         },
         {
           "type": "permanent",
           "condition": "TestConditionHasProblem",
           "reason": "TestIsIntentionallySucceeding",
-          "path": "/home/kubernetes/scripts//test_condition_succeed.sh",
+          "path": "/home/kubernetes/test_condition_succeed.sh",
           "timeout": "60s"
         }
       ]

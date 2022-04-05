@@ -126,9 +126,36 @@ func (c *customPluginMonitor) monitorLoop() {
 
 	resultChan := c.plugin.GetResultChan()
 
+	for {
+		select {
+		case result, ok := <-resultChan:
+			if !ok {
+				glog.Errorf("Result channel closed: %s", c.configPath)
+				return
+			}
+			glog.V(3).Infof("Receive new plugin result for %s: %+v", c.configPath, result)
+			status := c.generateStatus(result)
+			glog.V(3).Infof("New status generated: %+v", status)
+			c.statusChan <- status
+		case <-c.tomb.Stopping():
+			c.plugin.Stop()
+			glog.Infof("Custom plugin monitor stopped: %s", c.configPath)
+			c.tomb.Done()
+			return
+		}
+	}
+}
+
+/*
+// monitorLoop is the main loop of customPluginMonitor.
+func (c *customPluginMonitor) monitorLoop() {
+	c.initializeStatus()
+
+	resultChan := c.plugin.GetResultChan()
+
 	// runRules done for the interval
 	//intervalEndChan := c.plugin.GetIntervalEndChan()
-	var intervalResults []cpmtypes.Result
+	//var intervalResults []cpmtypes.Result
 
 	for {
 		select {
@@ -140,21 +167,21 @@ func (c *customPluginMonitor) monitorLoop() {
 
 			glog.V(3).Infof("Receive new plugin result for %s: %+v", c.configPath, result)
 			// gather results for single rule interval loop
-			intervalResults = append(intervalResults)
+			//intervalResults = append(intervalResults)
 
 			//glog.V(3).Infof("Receive new plugin result for %s: %+v", c.configPath, result)
 			//status := c.generateStatus(result)
 			//glog.V(3).Infof("New status generated: %+v", status)
 			//c.statusChan <- status
 
-		case _, ok := <-intervalEndChan:
-			if !ok {
-				glog.Errorf("Interval End Channel closed: %s", c.configPath)
-				return
-			}
-			//status := c.generateStatus(intervalResults)
-			//glog.V(3).Infof("New status generated: %+v", status)
-			//c.statusChan <- status
+		//case _, ok := <-intervalEndChan:
+		//	if !ok {
+		//		glog.Errorf("Interval End Channel closed: %s", c.configPath)
+		//		return
+		//	}
+		//	//status := c.generateStatus(intervalResults)
+		//	//glog.V(3).Infof("New status generated: %+v", status)
+		//	//c.statusChan <- status
 		case <-c.tomb.Stopping():
 			c.plugin.Stop()
 			glog.Infof("Custom plugin monitor stopped: %s", c.configPath)
@@ -163,7 +190,8 @@ func (c *customPluginMonitor) monitorLoop() {
 		}
 	}
 }
-
+*/
+/*
 func (c *customPluginMonitor) generateStatus(results []cpmtypes.Result) *types.Status {
 	timestamp := time.Now()
 	var activeProblemEvents []types.Event
@@ -311,8 +339,8 @@ func (c *customPluginMonitor) generateStatus(results []cpmtypes.Result) *types.S
 	}
 	return status
 }
+*/
 
-/*
 // generateStatus generates status from the plugin check result.
 func (c *customPluginMonitor) generateStatus(result cpmtypes.Result) *types.Status {
 
@@ -445,7 +473,6 @@ func (c *customPluginMonitor) generateStatus(result cpmtypes.Result) *types.Stat
 	}
 	return status
 }
-*/
 
 func toConditionStatus(s cpmtypes.Status) types.ConditionStatus {
 	switch s {
