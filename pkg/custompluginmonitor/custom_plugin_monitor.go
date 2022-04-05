@@ -126,6 +126,10 @@ func (c *customPluginMonitor) monitorLoop() {
 
 	resultChan := c.plugin.GetResultChan()
 
+	// runRules done for the interval
+	//intervalEndChan := c.plugin.GetIntervalEndChan()
+	var intervalResults []cpmtypes.Result
+
 	for {
 		select {
 		case result, ok := <-resultChan:
@@ -133,10 +137,24 @@ func (c *customPluginMonitor) monitorLoop() {
 				glog.Errorf("Result channel closed: %s", c.configPath)
 				return
 			}
+
 			glog.V(3).Infof("Receive new plugin result for %s: %+v", c.configPath, result)
-			status := c.generateStatus(result)
-			glog.V(3).Infof("New status generated: %+v", status)
-			c.statusChan <- status
+			// gather results for single rule interval loop
+			intervalResults = append(intervalResults)
+
+			//glog.V(3).Infof("Receive new plugin result for %s: %+v", c.configPath, result)
+			//status := c.generateStatus(result)
+			//glog.V(3).Infof("New status generated: %+v", status)
+			//c.statusChan <- status
+
+		case _, ok := <-intervalEndChan:
+			if !ok {
+				glog.Errorf("Interval End Channel closed: %s", c.configPath)
+				return
+			}
+			//status := c.generateStatus(intervalResults)
+			//glog.V(3).Infof("New status generated: %+v", status)
+			//c.statusChan <- status
 		case <-c.tomb.Stopping():
 			c.plugin.Stop()
 			glog.Infof("Custom plugin monitor stopped: %s", c.configPath)
@@ -146,8 +164,158 @@ func (c *customPluginMonitor) monitorLoop() {
 	}
 }
 
+func (c *customPluginMonitor) generateStatus(results []cpmtypes.Result) *types.Status {
+	timestamp := time.Now()
+	var activeProblemEvents []types.Event
+	var inactiveProblemEvents []types.Event
+
+	var unProcessedResults []cpmtypes.Result
+
+	for _, result := range results {
+		status := toConditionStatus(result.ExitStatus)
+		if result.Rule.Type == types.Temp {
+			// For temporary error only generate event when exit status is above warning
+			if result.ExitStatus >= cpmtypes.NonOK {
+				activeProblemEvents = append(activeProblemEvents, types.Event{
+					Severity:  types.Warn,
+					Timestamp: timestamp,
+					Reason:    result.Rule.Reason,
+					Message:   result.Message,
+				})
+			}
+		} else {
+			// we skip result that sets condition true, and result that sets condition false/unknown but with a different reason
+			if status == types.True {
+				unProcessedResults = append(unProcessedResults, result)
+				continue
+			}
+
+			for i := range c.conditions {
+				condition := &c.conditions[i]
+
+				// if appropriate (current condition's reason changes to false/unknown), unset(set to false/unknown) condition first.
+				// In case there are multiple reasons per condition, this will prevent ignoring new reason that sets
+				// condition true (since original condition reason takes precedence) or flapping (condition set to false
+				// by current reason, then to true by another reason)
+				if condition.Type == result.Rule.Condition && condition.Reason == result.Rule.Reason {
+					// The condition reason specified in the rule and the result message
+					// represent the problem happened. We need to know the default condition
+					// from the config, so that we can set the new condition reason/message
+					// back when such problem goes away.
+					var defaultConditionReason string
+					var defaultConditionMessage string
+					for j := range c.config.DefaultConditions {
+						defaultCondition := &c.config.DefaultConditions[j]
+						if defaultCondition.Type == result.Rule.Condition {
+							defaultConditionReason = defaultCondition.Reason
+							defaultConditionMessage = defaultCondition.Message
+							break
+						}
+					}
+
+					var newReason string
+					var newMessage string
+					newReason = defaultConditionReason
+					if status == types.False {
+						newMessage = defaultConditionMessage
+					} else {
+						// When status unknown, the result's message is important for debug
+						newMessage = result.Message
+					}
+
+					condition.Transition = timestamp
+					condition.Status = status
+					condition.Reason = newReason
+					condition.Message = newMessage
+
+					break
+				}
+			}
+		}
+	}
+
+	for _, result := range unProcessedResults {
+		status := toConditionStatus(result.ExitStatus)
+		// we iterate through results that sets condition true for different reasons
+		// whatever result that went through result channel first takes precedence
+		for i := range c.conditions {
+			condition := &c.conditions[i]
+			if condition.Type == result.Rule.Condition {
+				if condition.Status != types.True ||
+					(condition.Reason == result.Rule.Reason && *c.config.PluginGlobalConfig.EnableMessageChangeBasedConditionUpdate) {
+					// update condition only when condition is currently false, or message based condition update is enabled.
+					// for each condition, this if-block will be reached once
+					condition.Transition = timestamp
+					condition.Status = status
+					condition.Reason = result.Rule.Reason
+					condition.Message = result.Message
+
+					updateEvent := util.GenerateConditionChangeEvent(
+						condition.Type,
+						status,
+						result.Rule.Reason,
+						timestamp,
+					)
+
+					activeProblemEvents = append(activeProblemEvents, updateEvent)
+				}
+
+				break
+			}
+		}
+	}
+
+	for i := range c.conditions {
+		// check for conditions that are still false/unknown
+		condition := &c.conditions[i]
+		if condition.Status != types.True {
+			updateEvent := util.GenerateConditionChangeEvent(
+				condition.Type,
+				condition.Status,
+				condition.Reason,
+				timestamp,
+			)
+
+			inactiveProblemEvents = append(inactiveProblemEvents, updateEvent)
+		}
+	}
+
+	if *c.config.EnableMetricsReporting {
+		// Increment problem counter only for active problems which just got detected.
+		for _, event := range activeProblemEvents {
+			err := problemmetrics.GlobalProblemMetricsManager.IncrementProblemCounter(
+				event.Reason, 1)
+			if err != nil {
+				glog.Errorf("Failed to update problem counter metrics for %q: %v",
+					event.Reason, err)
+			}
+		}
+		for _, condition := range c.conditions {
+			err := problemmetrics.GlobalProblemMetricsManager.SetProblemGauge(
+				condition.Type, condition.Reason, condition.Status == types.True)
+			if err != nil {
+				glog.Errorf("Failed to update problem gauge metrics for problem %q, reason %q: %v",
+					condition.Type, condition.Reason, err)
+			}
+		}
+	}
+	status := &types.Status{
+		Source: c.config.Source,
+		// TODO(random-liu): Aggregate events and conditions and then do periodically report.
+		Events:     append(activeProblemEvents, inactiveProblemEvents...),
+		Conditions: c.conditions,
+	}
+	// Log only if condition has changed
+	if len(activeProblemEvents) != 0 || len(inactiveProblemEvents) != 0 {
+		glog.V(0).Infof("New status generated: %+v", status)
+	}
+	return status
+}
+
+/*
 // generateStatus generates status from the plugin check result.
 func (c *customPluginMonitor) generateStatus(result cpmtypes.Result) *types.Status {
+
 	timestamp := time.Now()
 	var activeProblemEvents []types.Event
 	var inactiveProblemEvents []types.Event
@@ -277,6 +445,7 @@ func (c *customPluginMonitor) generateStatus(result cpmtypes.Result) *types.Stat
 	}
 	return status
 }
+*/
 
 func toConditionStatus(s cpmtypes.Status) types.ConditionStatus {
 	switch s {

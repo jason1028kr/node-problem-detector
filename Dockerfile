@@ -27,5 +27,8 @@ COPY ./bin/node-problem-detector /node-problem-detector
 ARG LOGCOUNTER
 COPY ./bin/health-checker ${LOGCOUNTER} /home/kubernetes/bin/
 
+COPY ./config/test_condition_fail.sh /home/kubernetes/scripts/
+COPY ./config/test_condition_succeed.sh /home/kubernetes/scripts/
+
 COPY config /config
 ENTRYPOINT ["/node-problem-detector", "--config.system-log-monitor=/config/kernel-monitor.json"]

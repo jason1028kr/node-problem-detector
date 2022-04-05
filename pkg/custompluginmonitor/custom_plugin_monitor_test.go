@@ -29,3 +29,7 @@ func TestRegistration(t *testing.T) {
 		func() { problemdaemon.GetProblemDaemonHandlerOrDie("custom-plugin-monitor") },
 		"Custom plugin monitor failed to register itself as a problem daemon.")
 }
+
+func TestGenerateStatus(t *testing.T) {
+
+}

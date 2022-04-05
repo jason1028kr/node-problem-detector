@@ -64,25 +64,58 @@ data:
             }
         ]
     }
-  docker-monitor.json: |
+  cpm-test.json: |
     {
-        "plugin": "journald",
-        "pluginConfig": {
-            "source": "dockerd"
+      "plugin": "custom",
+      "pluginConfig": {
+        "invoke_interval": "60s",
+        "timeout": "60s"
+      },
+      "source": "test-custom-plugin-monitor",
+      "metricsReporting": true,
+      "conditions": [
+        {
+          "type": "TestConditionHasProblem",
+          "reason": "TestIsOK",
+          "message": "test condition is OK"
+        }
+      ],
+      "rules": [
+        {
+          "type": "permanent",
+          "condition": "TestConditionHasProblem",
+          "reason": "TestIsIntentionallyFailing",
+          "path": "/home/kubernetes/scripts//test_condition_fail.sh",
+          "timeout": "60s"
         },
-        "logPath": "/var/log/journal",
-        "lookback": "5m",
-        "bufferSize": 10,
-        "source": "docker-monitor",
-        "conditions": [],
-        "rules": [
-            {
-                "type": "temporary",
-                "reason": "CorruptDockerImage",
-                "pattern": "Error trying v2 registry: failed to register layer: rename /var/lib/docker/image/(.+) /var/lib/docker/image/(.+): directory not empty.*"
-            }
-        ]
+        {
+          "type": "permanent",
+          "condition": "TestConditionHasProblem",
+          "reason": "TestIsIntentionallySucceeding",
+          "path": "/home/kubernetes/scripts//test_condition_succeed.sh",
+          "timeout": "60s"
+        }
+      ]
     }
+#  docker-monitor.json: |
+#    {
+#        "plugin": "journald",
+#        "pluginConfig": {
+#            "source": "dockerd"
+#        },
+#        "logPath": "/var/log/journal",
+#        "lookback": "5m",
+#        "bufferSize": 10,
+#        "source": "docker-monitor",
+#        "conditions": [],
+#        "rules": [
+#            {
+#                "type": "temporary",
+#                "reason": "CorruptDockerImage",
+#                "pattern": "Error trying v2 registry: failed to register layer: rename /var/lib/docker/image/(.+) /var/lib/docker/image/(.+): directory not empty.*"
+#            }
+#        ]
+#    }
 kind: ConfigMap
 metadata:
   name: node-problem-detector-config

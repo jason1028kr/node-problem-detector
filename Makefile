@@ -32,7 +32,8 @@ VERSION?=$(shell if [ -d .git ]; then echo `git describe --tags --dirty`; else e
 TAG?=$(VERSION)
 
 # REGISTRY is the container registry to push into.
-REGISTRY?=gcr.io/k8s-staging-npd
+#REGISTRY?=gcr.io/k8s-staging-npd
+REGISTRY?=jasonjungacr.azurecr.io/k8s-staging-npd
 
 # UPLOAD_PATH is the cloud storage path to upload release tar.
 UPLOAD_PATH?=gs://kubernetes-release
@@ -62,7 +63,7 @@ IMAGE:=$(REGISTRY)/node-problem-detector:$(TAG)
 
 # ENABLE_JOURNALD enables build journald support or not. Building journald
 # support needs libsystemd-dev or libsystemd-journal-dev.
-ENABLE_JOURNALD?=1
+ENABLE_JOURNALD?=0
 
 ifeq ($(go env GOHOSTOS), darwin)
 ENABLE_JOURNALD=0
@@ -260,7 +261,6 @@ build-in-docker: clean docker-builder
 		-c 'cd /gopath/src/k8s.io/node-problem-detector/ && make build-binaries'
 
 push-container: build-container
-	gcloud auth configure-docker
 	docker push $(IMAGE)
 
 push-tar: build-tar
