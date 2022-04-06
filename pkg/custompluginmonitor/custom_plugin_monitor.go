@@ -18,7 +18,9 @@ package custompluginmonitor
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"k8s.io/node-problem-detector/pkg/util"
 	"time"
 
 	"github.com/golang/glog"
@@ -28,7 +30,6 @@ import (
 	"k8s.io/node-problem-detector/pkg/problemdaemon"
 	"k8s.io/node-problem-detector/pkg/problemmetrics"
 	"k8s.io/node-problem-detector/pkg/types"
-	"k8s.io/node-problem-detector/pkg/util"
 	"k8s.io/node-problem-detector/pkg/util/tomb"
 )
 
@@ -120,6 +121,7 @@ func (c *customPluginMonitor) Stop() {
 	c.tomb.Stop()
 }
 
+/*
 // monitorLoop is the main loop of customPluginMonitor.
 func (c *customPluginMonitor) monitorLoop() {
 	c.initializeStatus()
@@ -145,8 +147,8 @@ func (c *customPluginMonitor) monitorLoop() {
 		}
 	}
 }
+*/
 
-/*
 // monitorLoop is the main loop of customPluginMonitor.
 func (c *customPluginMonitor) monitorLoop() {
 	c.initializeStatus()
@@ -190,9 +192,9 @@ func (c *customPluginMonitor) monitorLoop() {
 		}
 	}
 }
-*/
-/*
+
 func (c *customPluginMonitor) generateStatus(results []cpmtypes.Result) *types.Status {
+	fmt.Println("generateStatus-0")
 	timestamp := time.Now()
 	var activeProblemEvents []types.Event
 	var inactiveProblemEvents []types.Event
@@ -261,7 +263,7 @@ func (c *customPluginMonitor) generateStatus(results []cpmtypes.Result) *types.S
 			}
 		}
 	}
-
+	fmt.Println("generateStatus-1")
 	for _, result := range unProcessedResults {
 		status := toConditionStatus(result.ExitStatus)
 		// we iterate through results that sets condition true for different reasons
@@ -292,7 +294,7 @@ func (c *customPluginMonitor) generateStatus(results []cpmtypes.Result) *types.S
 			}
 		}
 	}
-
+	fmt.Println("generateStatus-2")
 	for i := range c.conditions {
 		// check for conditions that are still false/unknown
 		condition := &c.conditions[i]
@@ -307,7 +309,7 @@ func (c *customPluginMonitor) generateStatus(results []cpmtypes.Result) *types.S
 			inactiveProblemEvents = append(inactiveProblemEvents, updateEvent)
 		}
 	}
-
+	fmt.Println("generateStatus-3")
 	if *c.config.EnableMetricsReporting {
 		// Increment problem counter only for active problems which just got detected.
 		for _, event := range activeProblemEvents {
@@ -327,6 +329,7 @@ func (c *customPluginMonitor) generateStatus(results []cpmtypes.Result) *types.S
 			}
 		}
 	}
+	fmt.Println("generateStatus-4")
 	status := &types.Status{
 		Source: c.config.Source,
 		// TODO(random-liu): Aggregate events and conditions and then do periodically report.
@@ -337,10 +340,11 @@ func (c *customPluginMonitor) generateStatus(results []cpmtypes.Result) *types.S
 	if len(activeProblemEvents) != 0 || len(inactiveProblemEvents) != 0 {
 		glog.V(0).Infof("New status generated: %+v", status)
 	}
+	fmt.Println("generateStatus-5")
 	return status
 }
-*/
 
+/*
 // generateStatus generates status from the plugin check result.
 func (c *customPluginMonitor) generateStatus(result cpmtypes.Result) *types.Status {
 
@@ -473,6 +477,7 @@ func (c *customPluginMonitor) generateStatus(result cpmtypes.Result) *types.Stat
 	}
 	return status
 }
+*/
 
 func toConditionStatus(s cpmtypes.Status) types.ConditionStatus {
 	switch s {
