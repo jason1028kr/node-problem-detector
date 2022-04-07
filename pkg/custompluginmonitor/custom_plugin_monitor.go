@@ -155,8 +155,8 @@ func (c *customPluginMonitor) monitorLoop() {
 	resultChan := c.plugin.GetResultChan()
 
 	// runRules done for the interval
-	//intervalEndChan := c.plugin.GetIntervalEndChan()
-	//var intervalResults []cpmtypes.Result
+	intervalEndChan := c.plugin.GetIntervalEndChan()
+	var intervalResults []cpmtypes.Result
 
 	for {
 		select {
@@ -167,22 +167,29 @@ func (c *customPluginMonitor) monitorLoop() {
 			}
 
 			glog.V(3).Infof("Receive new plugin result for %s: %+v", c.configPath, result)
+
 			// gather results for single rule interval loop
-			//intervalResults = append(intervalResults)
+			intervalResults = append(intervalResults, result)
 
 			//glog.V(3).Infof("Receive new plugin result for %s: %+v", c.configPath, result)
 			//status := c.generateStatus(result)
 			//glog.V(3).Infof("New status generated: %+v", status)
 			//c.statusChan <- status
 
-		//case _, ok := <-intervalEndChan:
-		//	if !ok {
-		//		glog.Errorf("Interval End Channel closed: %s", c.configPath)
-		//		return
-		//	}
-		//	//status := c.generateStatus(intervalResults)
-		//	//glog.V(3).Infof("New status generated: %+v", status)
-		//	//c.statusChan <- status
+		case _, ok := <-intervalEndChan:
+			if !ok {
+				glog.Errorf("Interval End Channel closed: %s", c.configPath)
+				return
+			}
+
+			glog.V(3).Infof("All plugins ran for one interval for %s", c.configPath)
+			status := c.generateStatus(intervalResults)
+			glog.V(3).Infof("New status generated: %+v", status)
+			c.statusChan <- status
+
+			glog.V(3).Info("Resetting interval")
+			intervalResults = []cpmtypes.Result{}
+
 		case <-c.tomb.Stopping():
 			c.plugin.Stop()
 			glog.Infof("Custom plugin monitor stopped: %s", c.configPath)

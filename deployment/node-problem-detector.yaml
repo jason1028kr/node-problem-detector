@@ -31,7 +31,7 @@ spec:
         - --logtostderr
         #- --config.system-log-monitor=/config/kernel-monitor.json,/config/docker-monitor.json
         - --config.custom-plugin-monitor=/config/cpm-test.json
-        image: jasonjungacr.azurecr.io/k8s-staging-npd/node-problem-detector:v0.8.10-11-g6366557-dirty
+        image: jasonjungacr.azurecr.io/k8s-staging-npd/node-problem-detector:v0.8.10-14-g2eed64d-dirty
         resources:
           limits:
             cpu: 10m
